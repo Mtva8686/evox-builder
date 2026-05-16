@@ -1,0 +1,60 @@
+name: Evolution X Build Cloud
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Tối ưu hóa dung lượng Server
+      uses: easimon/maximize-build-space@master
+      with:
+        root-reserve-mb: 5120
+        swap-size-mb: 1024
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+
+    - name: Cài đặt các công cụ build Android
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.1-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+
+    - name: Thiết lập Repo Tool của Google
+      run: |
+        mkdir -p ~/bin
+        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        chmod a+x ~/bin/repo
+        sudo ln -sf ~/bin/repo /usr/bin/repo
+
+    - name: Tải Source Code Evolution X
+      run: |
+        mkdir -p ~/android/evox
+        cd ~/android/evox
+        git config --global user.name "Mtva8686"
+        git config --global user.email "clongic84@gmail.com"
+        repo init -u https://github.com/Evolution-X/manifest -b vic --git-lfs --depth=1
+        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+    - name: Ráp các mảnh ghép của ông vào hệ thống
+      run: |
+        cd ~/android/evox
+        git clone https://github.com/Mtva8686/android_device_samsung_m21 -b 16.0 device/samsung/m21
+        git clone https://github.com/Mtva8686/android_device_samsung_universal9611-common -b 16.0 device/samsung/universal9611-common
+        git clone https://github.com/Mtva8686/kernel_samsung_universal9611 -b Grass-Unified kernel/samsung/universal9611
+        git clone https://github.com/crdroidandroid/android_vendor_samsung_m21 -b 16.0 vendor/samsung/m21
+        git clone https://github.com/crdroidandroid/android_vendor_samsung_universal9611-common -b 16.0 vendor/samsung/universal9611-common
+
+    - name: Bắt đầu Compile ROM (Lên Nhạc)
+      run: |
+        cd ~/android/evox
+        . build/envsetup.sh
+        lunch evox_m21-userdebug
+        mka bacon -j$(nproc --all)
+
+    - name: Tải file ROM lên làm quà (Upload Artifact)
+      uses: actions/upload-artifact@v4
+      with:
+        name: EvolutionX_M21_ROM
+        path: ~/android/evox/out/target/product/m21/*.zip
