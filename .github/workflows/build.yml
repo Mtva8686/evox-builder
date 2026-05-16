@@ -10,6 +10,18 @@ jobs:
     - name: Kiểm tra Repo
       uses: actions/checkout@v4
 
+    - name: Tối ưu hóa dung lượng Server (Bản Vá Lỗi)
+      uses: easimon/maximize-build-space@master
+      with:
+        root-reserve-mb: 2048
+        swap-size-mb: 1024
+        # Tắt dọn dẹp bằng apt để tránh lỗi exit code 100 trên Ubuntu Noble
+        remove-dotnet: 'false'
+        remove-android: 'false'
+        remove-haskell: 'false'
+        remove-codeql: 'true'
+        remove-docker-images: 'true'
+
     - name: Cài đặt các công cụ build Android
       run: |
         sudo apt-get update
@@ -24,8 +36,10 @@ jobs:
 
     - name: Tải Source Code Evolution X
       run: |
-        mkdir -p ~/android/evox
-        cd ~/android/evox
+        # Chuyển thư mục làm việc sang phân vùng lớn vừa được tối ưu
+        cd ${{ github.workspace }}
+        mkdir -p android/evox
+        cd android/evox
         git config --global user.name "Mtva8686"
         git config --global user.email "clongic84@gmail.com"
         repo init -u https://github.com/Evolution-X/manifest -b vic --git-lfs --depth=1
@@ -33,7 +47,7 @@ jobs:
 
     - name: Ráp các mảnh ghép của ông vào hệ thống
       run: |
-        cd ~/android/evox
+        cd ${{ github.workspace }}/android/evox
         git clone https://github.com/Mtva8686/android_device_samsung_m21 -b 16.0 device/samsung/m21
         git clone https://github.com/Mtva8686/android_device_samsung_universal9611-common -b 16.0 device/samsung/universal9611-common
         git clone https://github.com/Mtva8686/kernel_samsung_universal9611 -b Grass-Unified kernel/samsung/universal9611
@@ -42,7 +56,7 @@ jobs:
 
     - name: Bắt đầu Compile ROM (Lên Nhạc)
       run: |
-        cd ~/android/evox
+        cd ${{ github.workspace }}/android/evox
         . build/envsetup.sh
         lunch evox_m21-userdebug
         mka bacon -j$(nproc --all)
@@ -51,4 +65,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: EvolutionX_M21_ROM
-        path: ~/android/evox/out/target/product/m21/*.zip
+        path: ${{ github.workspace }}/android/evox/out/target/product/m21/*.zip
