@@ -7,53 +7,50 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: Kiểm tra Repo
+    - name: Checkout Repo
       uses: actions/checkout@v4
 
-    - name: Kích hoạt phân vùng ảo Hack 250GB Bộ Nhớ
+    - name: Maximize Build Disk Space (250GB Mod)
       run: |
-        echo "=== Kiểm tra ổ đĩa ban đầu ==="
+        echo "=== Initial Disk Space ==="
         df -h
         
-        # Tạo không gian lưu trữ siêu rộng bằng cách dọn Docker ngầm
         sudo rm -rf /usr/share/dotnet
         sudo rm -rf /usr/local/lib/android
         sudo rm -rf /opt/ghc
         sudo rm -rf /opt/hostedtoolcache/CodeQL
         sudo docker image prune --all --force
         
-        # Kịch độc: Di chuyển thư mục làm việc của Android vào phân vùng ẩn chứa Docker của máy ảo (Nơi có hơn 200GB trống)
         sudo mkdir -p /mnt/android_build
         sudo chown -R runner:runner /mnt/android_build
         ln -s /mnt/android_build ~/android
         
-        echo "=== Cấu hình bộ nhớ hoàn tất ==="
+        echo "=== Optimized Disk Space ==="
         df -h
 
-    - name: Cài đặt các công cụ build Android
+    - name: Install Android Build Dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
 
-    - name: Thiết lập Repo Tool của Google
+    - name: Setup Google Repo Tool
       run: |
         mkdir -p ~/bin
         curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
         chmod a+x ~/bin/repo
         sudo ln -sf ~/bin/repo /usr/bin/repo
 
-    - name: Tải Source Code Evolution X (Android 16)
+    - name: Fetch Evolution X Source Code (Android 16)
       run: |
         mkdir -p ~/android/evox
         cd ~/android/evox
         git config --global user.name "Mtva8686"
         git config --global user.email "clongic84@gmail.com"
         
-        # Khởi tạo đúng nhánh Android 16 mới nhất (bq2)
         repo init -u https://github.com/Evolution-X/manifest -b bq2 --git-lfs --depth=1
         repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
-    - name: Ráp các mảnh ghép của ông vào hệ thống
+    - name: Clone Device, Kernel, and Vendor Trees
       run: |
         cd ~/android/evox
         git clone https://github.com/Mtva8686/android_device_samsung_m21 -b 16.0 device/samsung/m21
@@ -62,14 +59,14 @@ jobs:
         git clone https://github.com/crdroidandroid/android_vendor_samsung_m21 -b 16.0 vendor/samsung/m21
         git clone https://github.com/crdroidandroid/android_vendor_samsung_universal9611-common -b 16.0 vendor/samsung/universal9611-common
 
-    - name: Bắt đầu Compile ROM (Lên Nhạc)
+    - name: Compile ROM
       run: |
         cd ~/android/evox
         . build/envsetup.sh
         lunch evox_m21-userdebug
         mka bacon -j$(nproc --all)
 
-    - name: Tải file ROM lên làm quà (Upload Artifact)
+    - name: Upload Output ROM Artifact
       uses: actions/upload-artifact@v4
       with:
         name: EvolutionX_M21_ROM
