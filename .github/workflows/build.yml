@@ -10,22 +10,26 @@ jobs:
     - name: Checkout Repo
       uses: actions/checkout@v4
 
-    - name: Maximize Build Disk Space (250GB Mod)
+    - name: Maximize Build Disk Space (SUPER CLEAN MOD)
       run: |
-        echo "=== Initial Disk Space ==="
+        echo "=== Ổ đĩa trước khi dọn dẹp ==="
         df -h
         
+        # Triệt hạ tận gốc các gói phần mềm nặng ký của GitHub Actions
         sudo rm -rf /usr/share/dotnet
         sudo rm -rf /usr/local/lib/android
         sudo rm -rf /opt/ghc
         sudo rm -rf /opt/hostedtoolcache/CodeQL
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        
+        # Dọn dẹp package manager và Docker system rác
+        sudo apt-get remove -y '^dotnet-.*' '^llvm-.*' 'php.*' '^mongodb-.*' 'mysql.*' 'azure-cli' 'google-chrome-stable' 'firefox' 'powershell' 'mono-devel'
+        sudo apt-get autoremove -y
+        sudo apt-get clean
         sudo docker image prune --all --force
         
-        sudo mkdir -p /mnt/android_build
-        sudo chown -R runner:runner /mnt/android_build
-        ln -s /mnt/android_build ~/android
-        
-        echo "=== Optimized Disk Space ==="
+        echo "=== Ổ đĩa sau khi dọn dẹp sạch sành sanh ==="
         df -h
 
     - name: Install Android Build Dependencies
@@ -42,17 +46,21 @@ jobs:
 
     - name: Fetch Evolution X Source Code (Android 16)
       run: |
-        mkdir -p ~/android/evox
-        cd ~/android/evox
+        # Tạo thư mục làm việc trực tiếp tại ổ đĩa gốc đã được dọn sạch
+        mkdir -p /home/runner/android/evox
+        cd /home/runner/android/evox
+        
         git config --global user.name "Mtva8686"
         git config --global user.email "mtva8686@gmail.com"
         
-        repo init -u https://github.com/Evolution-X/manifest -b bq2 --git-lfs --depth=1
-        repo sync -c -j4 --force-sync --no-clone-bundle --no-tags
+        repo init -u https://github.com/Evolution-X/manifest -b bq2 --depth=1 --git-lfs --groups=all,-notdefault,-device,-darwin,-x86,-tests
+        
+        # Đồng bộ nguồn với 4 luồng an toàn, tiết kiệm băng thông và dung lượng tối đa
+        repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch
 
     - name: Clone Device, Kernel, and Vendor Trees
       run: |
-        cd ~/android/evox
+        cd /home/runner/android/evox
         git clone https://github.com/Mtva8686/android_device_samsung_m21 -b 16.0 device/samsung/m21
         git clone https://github.com/Mtva8686/android_device_samsung_universal9611-common -b 16.0 device/samsung/universal9611-common
         git clone https://github.com/Mtva8686/kernel_samsung_universal9611 -b Grass-Unified kernel/samsung/universal9611
@@ -61,7 +69,7 @@ jobs:
 
     - name: Compile ROM
       run: |
-        cd ~/android/evox
+        cd /home/runner/android/evox
         . build/envsetup.sh
         lunch evox_m21-userdebug
         mka bacon -j$(nproc --all)
@@ -70,4 +78,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: EvolutionX_M21_ROM
-        path: ~/android/evox/out/target/product/m21/*.zip
+        path: /home/runner/android/evox/out/target/product/m21/*.zip
