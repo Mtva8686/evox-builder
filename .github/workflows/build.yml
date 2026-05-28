@@ -1,81 +1,72 @@
 name: Evolution X Build Cloud
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Tạo nút bấm chạy thủ công trên Web GitHub
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@v4
+    - name: Tối ưu hóa dung lượng Server (Bóp nghẹt rác nới rộng ổ đĩa)
+      uses: easimon/maximize-build-space@master
+      with:
+        root-reserve-mb: 1024
+        swap-size-mb: 10240
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+        remove-docker-images: 'true'
 
-    - name: Maximize Build Disk Space (SUPER CLEAN MOD)
-      run: |
-        echo "=== Ổ đĩa trước khi dọn dẹp ==="
-        df -h
-        
-        # Triệt hạ tận gốc các gói phần mềm nặng ký của GitHub Actions
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /usr/local/lib/android
-        sudo rm -rf /opt/ghc
-        sudo rm -rf /opt/hostedtoolcache/CodeQL
-        sudo rm -rf /usr/local/share/boost
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-        
-        # Dọn dẹp package manager và Docker system rác
-        sudo apt-get remove -y '^dotnet-.*' '^llvm-.*' 'php.*' '^mongodb-.*' 'mysql.*' 'azure-cli' 'google-chrome-stable' 'firefox' 'powershell' 'mono-devel'
-        sudo apt-get autoremove -y
-        sudo apt-get clean
-        sudo docker image prune --all --force
-        
-        echo "=== Ổ đĩa sau khi dọn dẹp sạch sành sanh ==="
-        df -h
-
-    - name: Install Android Build Dependencies
+    - name: Cài đặt các công cụ build Android
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git git-lfs gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzma pathspec python3-pathspec pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libwxgtk3.2-dev libncurses5
 
-    - name: Setup Google Repo Tool
+    - name: Thiết lập Repo Tool của Google
       run: |
         mkdir -p ~/bin
         curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
         chmod a+x ~/bin/repo
         sudo ln -sf ~/bin/repo /usr/bin/repo
 
-    - name: Fetch Evolution X Source Code (Android 16)
+    - name: Tải Source Code Evolution X (Ăn Kiêng Cực Hạn - Khóa nhánh bq2)
       run: |
-        # Tạo thư mục làm việc trực tiếp tại ổ đĩa gốc đã được dọn sạch
         mkdir -p /home/runner/android/evox
         cd /home/runner/android/evox
-        
         git config --global user.name "Mtva8686"
         git config --global user.email "mtva8686@gmail.com"
-        
-        repo init -u https://github.com/Evolution-X/manifest -b bq2 --depth=1 --git-lfs --groups=all,-notdefault,-device,-darwin,-x86,-tests
-        
-        # Đồng bộ nguồn với 4 luồng an toàn, tiết kiệm băng thông và dung lượng tối đa
-        repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch
+        # Dùng nhánh bq2 (EvoX 11.7 Android 16 QPR2 mới nhất) thay vì vic cũ
+        # Thêm nhóm loại trừ để máy ảo không bị tràn bộ nhớ 140GB
+        repo init -u https://github.com/Evolution-X/manifest -b bq2 --git-lfs --depth=1 --groups=all,-notdefault,-device,-infrastructure,-tests
+        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune
 
-    - name: Clone Device, Kernel, and Vendor Trees
+    - name: Ráp các mảnh ghép của ông vào hệ thống (Full Driver Phần Cứng)
       run: |
         cd /home/runner/android/evox
-        git clone https://github.com/Mtva8686/android_device_samsung_m21 -b 16.0 device/samsung/m21
-        git clone https://github.com/Mtva8686/android_device_samsung_universal9611-common -b 16.0 device/samsung/universal9611-common
-        git clone https://github.com/Mtva8686/kernel_samsung_universal9611 -b Grass-Unified kernel/samsung/universal9611
-        git clone https://github.com/crdroidandroid/android_vendor_samsung_m21 -b 16.0 vendor/samsung/m21
-        git clone https://github.com/crdroidandroid/android_vendor_samsung_universal9611-common -b 16.0 vendor/samsung/universal9611-common
+        
+        # 1. Cây cấu hình cốt lõi từ kho cá nhân của ông
+        git clone --depth=1 https://github.com/Mtva8686/android_device_samsung_m21 -b 16.0 device/samsung/m21
+        git clone --depth=1 https://github.com/Mtva8686/android_device_samsung_universal9611-common -b 16.0 device/samsung/universal9611-common
+        git clone --depth=1 https://github.com/Mtva8686/kernel_samsung_universal9611 -b Grass-Unified kernel/samsung/universal9611
+        
+        # 2. Driver độc quyền Vendor độc quyền từ crDroid để nhận sóng, vân tay, camera
+        git clone --depth=1 https://github.com/crdroidandroid/proprietary_vendor_samsung_m21 -b 16.0 vendor/samsung/m21
+        git clone --depth=1 https://github.com/crdroidandroid/proprietary_vendor_samsung_universal9611-common -b 16.0 vendor/samsung/universal9611-common
 
-    - name: Compile ROM
-      run: |
-        cd /home/runner/android/evox
-        . build/envsetup.sh
-        lunch evox_m21-userdebug
-        mka bacon -j$(nproc --all)
-
-    - name: Upload Output ROM Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: EvolutionX_M21_ROM
-        path: /home/runner/android/evox/out/target/product/m21/*.zip
+        # 3. Đống mảnh ghép HALs phần cứng Exynos 9611 bắt buộc phải có
+        git clone --depth=1 https://github.com/crdroidandroid/android_device_samsung_slsi_sepolicy -b 16.0 device/samsung_slsi/sepolicy
+        git clone --depth=1 https://github.com/crdroidandroid/android_hardware_samsung -b 16.0 hardware/samsung
+        git clone --depth=1 https://github.com/crdroidandroid/android_hardware_samsung_slsi_libbt -b 16.0 hardware/samsung_slsi/libbt
+        git clone --depth=1 https://github.com/crdroidandroid/android_hardware_samsung_slsi-linaro_config -b 16.0 hardware/samsung_slsi-linaro/config
+        git clone --depth=1 https://github.com/crdroidandroid/android_hardware_samsung_slsi-linaro_exynos -b 16.0 hardware/samsung_slsi-linaro/exynos
+        git clone --depth=1 https://github.com/crdroidandroid/android_hardware_samsung_slsi-linaro_exynos5 -b 16.0 hardware/samsung_slsi-linaro/exynos5
+        git clone --depth=1 https://github.com/crdroidandroid/android_hardware_samsung_slsi-linaro_graphics -b 16.0 hardware/samsung_slsi-linaro/graphics
+        git clone --depth=1 https://github.com/crdroidandroid/android_hardware_samsung_slsi-linaro_interfaces -b 16.0 hardware/samsung_slsi-linaro/interfaces
+        git clone --depth=1 https://github.com/crdroidandroid/android_hardware_samsung_slsi-linaro_openmax -b 16.0 hardware/samsung_slsi-linaro/openmax
+        git clone --depth=1 https://github.com/crdroidandroid/android_hardware_samsung_slsi_scsc_wifibt_wifi_hal -b 16.0 hardware/samsung_slsi/scsc_wifibt/wifi_hal
+        git clone --depth=1
