@@ -11,16 +11,18 @@ jobs:
       contents: write
 
     steps:
-    - name: Tối ưu hóa dung lượng Server (Bóp nghẹt rác nới rộng ổ đĩa)
-      uses: easimon/maximize-build-space@master
-      with:
-        root-reserve-mb: 1024
-        swap-size-mb: 10240
-        remove-dotnet: 'true'
-        remove-android: 'true'
-        remove-haskell: 'true'
-        remove-codeql: 'true'
-        remove-docker-images: 'true'
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: 🧹 Dọn rác thủ công (Ép nới rộng ổ đĩa không sợ lỗi)
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+        docker image prune --all --force
+        sudo apt-get clean
+        df -h
 
     - name: Cài đặt các công cụ build Android
       run: |
@@ -34,14 +36,12 @@ jobs:
         chmod a+x ~/bin/repo
         sudo ln -sf ~/bin/repo /usr/bin/repo
 
-    - name: Tải Source Code Evolution X (Ăn Kiêng Cực Hạn - Khóa nhánh bq2)
+    - name: Tải Source Code Evolution X (Ăn Kiêng Cực Hạn)
       run: |
         mkdir -p /home/runner/android/evox
         cd /home/runner/android/evox
         git config --global user.name "Mtva8686"
-        git config --global user.email "mtva8686@gmail.com"
-        # Dùng nhánh bq2 (EvoX 11.7 Android 16 QPR2 mới nhất) thay vì vic cũ
-        # Thêm nhóm loại trừ để máy ảo không bị tràn bộ nhớ 140GB
+        git config --global user.email "clongic84@gmail.com"
         repo init -u https://github.com/Evolution-X/manifest -b bq2 --git-lfs --depth=1 --groups=all,-notdefault,-device,-infrastructure,-tests
         repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune
 
@@ -69,4 +69,26 @@ jobs:
         git clone --depth=1 https://github.com/crdroidandroid/android_hardware_samsung_slsi-linaro_interfaces -b 16.0 hardware/samsung_slsi-linaro/interfaces
         git clone --depth=1 https://github.com/crdroidandroid/android_hardware_samsung_slsi-linaro_openmax -b 16.0 hardware/samsung_slsi-linaro/openmax
         git clone --depth=1 https://github.com/crdroidandroid/android_hardware_samsung_slsi_scsc_wifibt_wifi_hal -b 16.0 hardware/samsung_slsi/scsc_wifibt/wifi_hal
-        git clone --depth=1
+        git clone --depth=1 https://github.com/crdroidandroid/android_hardware_samsung_slsi_scsc_wifibt_wpa_supplicant_lib -b 16.0 hardware/samsung_slsi/scsc_wifibt/wpa_supplicant_lib
+
+    - name: 🛠️ Phẫu thuật độ Tree (Ép cây crDroid chạy trên Evolution X)
+      run: |
+        cd /home/runner/android/evox/device/samsung/m21
+        mv crdroid_m21.mk evox_m21.mk
+        sed -i 's/crdroid/evox/g' evox_m21.mk
+        sed -i 's/lineage/evox/g' evox_m21.mk
+        sed -i 's/crdroid/evox/g' AndroidProducts.mk
+        sed -i 's/lineage_m21/evox_m21/g' AndroidProducts.mk
+
+    - name: Bắt đầu Compile ROM (Lên Nhạc)
+      run: |
+        cd /home/runner/android/evox
+        . build/envsetup.sh
+        lunch evox_m21-userdebug
+        mka bacon -j$(nproc --all)
+
+    - name: Tải file ROM lên làm quà (Upload Artifact)
+      uses: actions/upload-artifact@v4
+      with:
+        name: EvolutionX_M21_ROM
+        path: /home/runner/android/evox/out/target/product/m21/EvolutionX*.zip
